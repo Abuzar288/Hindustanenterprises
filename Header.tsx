@@ -1,6 +1,5 @@
-
 import React, { useState } from 'react';
-import { NAVIGATION_LINKS, NavLink } from './constants';
+import { NAVIGATION_LINKS, NavLink, PRODUCT_CATEGORY_NAV_LABELS } from './constants'; // Import PRODUCT_CATEGORY_NAV_LABELS
 import InstagramIcon from './InstagramIcon';
 import FacebookIcon from './FacebookIcon';
 import WhatsAppIcon from './WhatsAppIcon';
@@ -67,11 +66,11 @@ const HindustanLogo: React.FC<{ svgClassName?: string }> = ({ svgClassName = "w-
 
 interface HeaderProps {
   onShowLogin: () => void;
-  // onShowRegister removed
   onShowHome: () => void;
+  onSelectCategory: (categoryName: string | null) => void; // New prop
 }
 
-const Header: React.FC<HeaderProps> = ({ onShowLogin, onShowHome }) => {
+const Header: React.FC<HeaderProps> = ({ onShowLogin, onShowHome, onSelectCategory }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const { currentUser, logout } = useAuth();
 
@@ -79,40 +78,47 @@ const Header: React.FC<HeaderProps> = ({ onShowLogin, onShowHome }) => {
   
   const handleLogoClick = () => {
     if (isMenuOpen) setIsMenuOpen(false);
-    onShowHome(); // This will lead to AdminPage if logged in, or public home if not
-    if (!currentUser) { // Only scroll to top for public home
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+    onShowHome(); 
+    if (!currentUser) { 
+        // onShowHome already calls onSelectCategory(null), so scrolling handled by App.tsx
     }
   }
 
-  const handleNavLinkClick = (e: React.MouseEvent<HTMLAnchorElement, MouseEvent> | React.MouseEvent<HTMLButtonElement, MouseEvent>, href: string) => {
+  const handleNavLinkClick = (
+    e: React.MouseEvent<HTMLAnchorElement, MouseEvent> | React.MouseEvent<HTMLButtonElement, MouseEvent>, 
+    navItem: NavLink // Pass the whole NavLink item
+  ) => {
     if (isMenuOpen) setIsMenuOpen(false);
+    e.preventDefault(); // Prevent default for all handled links
 
-    if (href.startsWith("#") && !currentUser) { // Anchor links only for non-admin view
-        e.preventDefault();
-        onShowHome(); 
-        
+    const { href, label } = navItem;
+
+    if (label === "HOME") {
+        onShowHome(); // This will also call onSelectCategory(null) in App.tsx
+    } else if (PRODUCT_CATEGORY_NAV_LABELS.includes(label) && !currentUser) {
+        // This is a product category link, and user is not admin
+        onSelectCategory(label);
+    } else if (href.startsWith("#") && !currentUser) { 
+        // For other anchor links like #about, #contact when not admin
+        onShowHome(); // Ensure main site view
         setTimeout(() => {
             const elementId = href.substring(1);
             const element = document.getElementById(elementId);
             if (element) {
-                element.scrollIntoView({ behavior: 'smooth' });
-            } else if (href === "#home") { 
-                 window.scrollTo({ top: 0, behavior: 'smooth' });
+                const headerOffset = document.querySelector('header')?.offsetHeight || 0;
+                const elementPosition = element.getBoundingClientRect().top + window.pageYOffset;
+                const offsetPosition = elementPosition - headerOffset;
+                window.scrollTo({ top: offsetPosition, behavior: 'smooth' });
             }
         }, 0);
-
-    } else {
-        if (href === "login") {
-            e.preventDefault();
-            onShowLogin();
-        } else if (href === "logout") {
-            e.preventDefault();
-            logout();
-            onShowHome(); 
-        }
-        // Removed "register" case
+    } else if (href === "login") {
+        onShowLogin();
+    } else if (href === "logout") {
+        logout();
+        onShowHome(); 
     }
+    // For external links or other cases, allow default if not prevented.
+    // Currently, all are prevented and handled.
   };
 
   const authButtonClass = "hover:text-amber-400 transition-colors duration-300 py-2 px-3 text-sm font-medium relative group";
@@ -123,7 +129,6 @@ const Header: React.FC<HeaderProps> = ({ onShowLogin, onShowHome }) => {
       {/* Top Section */}
       <div className="bg-gradient-to-r from-gray-50 to-gray-100 p-3 sm:p-4 md:px-8 md:py-5">
         <div className="container mx-auto flex flex-wrap justify-between items-center">
-          {/* Logo and Company Info */}
            <div 
              className="flex items-center space-x-2 sm:space-x-3 cursor-pointer" 
              onClick={handleLogoClick}
@@ -143,7 +148,6 @@ const Header: React.FC<HeaderProps> = ({ onShowLogin, onShowHome }) => {
             </div>
           </div>
 
-          {/* Contact Email & Desktop Auth Actions */}
           <div className="mt-2 sm:mt-3 md:mt-0 flex flex-col items-end space-y-1 sm:space-y-2">
              <a 
               href="mailto:Info@hindustanenterprises.in" 
@@ -155,16 +159,15 @@ const Header: React.FC<HeaderProps> = ({ onShowLogin, onShowHome }) => {
               {currentUser ? (
                 <>
                   <span className="text-sm font-medium mr-2" aria-live="polite">Welcome, {currentUser.username}!</span>
-                  <button onClick={(e) => handleNavLinkClick(e, 'logout')} className={`${authButtonClass} border border-amber-500 rounded hover:bg-amber-500 hover:text-white`}>
+                  <button onClick={(e) => handleNavLinkClick(e, {label: 'Logout', href: 'logout'})} className={`${authButtonClass} border border-amber-500 rounded hover:bg-amber-500 hover:text-white`}>
                     Logout
                   </button>
                 </>
               ) : (
                 <>
-                  <button onClick={(e) => handleNavLinkClick(e, 'login')} className={`${authButtonClass} border border-teal-500 rounded hover:bg-teal-500 hover:text-white`}>
+                  <button onClick={(e) => handleNavLinkClick(e, {label: 'Login', href: 'login'})} className={`${authButtonClass} border border-teal-500 rounded hover:bg-teal-500 hover:text-white`}>
                     Admin Login
                   </button>
-                  {/* Register button removed */}
                 </>
               )}
             </div>
@@ -172,17 +175,15 @@ const Header: React.FC<HeaderProps> = ({ onShowLogin, onShowHome }) => {
         </div>
       </div>
 
-      {/* Navigation Bar - Conditional rendering based on currentUser */}
       {!currentUser && (
         <nav className="bg-black text-white">
           <div className="container mx-auto px-4 md:px-8 flex justify-between items-center h-14 md:h-16">
-            {/* Desktop Navigation Links */}
             <div className="hidden md:flex space-x-5 lg:space-x-7 items-center">
               {NAVIGATION_LINKS.map((link: NavLink) => (
                 <a
                   key={link.label}
-                  href={link.href}
-                  onClick={(e) => handleNavLinkClick(e, link.href)}
+                  href={link.href} // href is still useful for context / right-click open
+                  onClick={(e) => handleNavLinkClick(e, link)}
                   className="hover:text-amber-400 transition-colors duration-300 py-2 text-sm font-medium relative group"
                 >
                   {link.label}
@@ -191,7 +192,6 @@ const Header: React.FC<HeaderProps> = ({ onShowLogin, onShowHome }) => {
               ))}
             </div>
 
-            {/* Social Media Icons (Desktop) */}
             <div className="hidden md:flex space-x-4 items-center">
               <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" aria-label="Instagram" className="hover:text-amber-400 transition-colors">
                 <InstagramIcon className="w-5 h-5" />
@@ -204,7 +204,6 @@ const Header: React.FC<HeaderProps> = ({ onShowLogin, onShowHome }) => {
               </a>
             </div>
 
-            {/* Mobile Menu Button & Social Icons */}
             <div className="md:hidden flex items-center space-x-3">
               <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" aria-label="Instagram" className="hover:text-amber-400 transition-colors">
                 <InstagramIcon className="w-5 h-5" />
@@ -226,7 +225,6 @@ const Header: React.FC<HeaderProps> = ({ onShowLogin, onShowHome }) => {
             </div>
           </div>
           
-          {/* Mobile Navigation Menu */}
           {isMenuOpen && (
             <div className="md:hidden absolute top-full left-0 right-0 bg-black bg-opacity-95 backdrop-blur-sm shadow-lg z-40 pb-5">
               <div className="container mx-auto px-4 pt-2 pb-3 space-y-1 flex flex-col items-center" role="menu" aria-orientation="vertical">
@@ -234,7 +232,7 @@ const Header: React.FC<HeaderProps> = ({ onShowLogin, onShowHome }) => {
                   <a
                     key={link.label}
                     href={link.href}
-                    onClick={(e) => handleNavLinkClick(e, link.href)}
+                    onClick={(e) => handleNavLinkClick(e, link)}
                     className="block px-3 py-2 rounded-md text-base font-medium text-gray-200 hover:bg-gray-700 hover:text-amber-300 w-full text-center transition-colors duration-300"
                     role="menuitem"
                   >
@@ -242,15 +240,13 @@ const Header: React.FC<HeaderProps> = ({ onShowLogin, onShowHome }) => {
                   </a>
                 ))}
                 <hr className="w-4/5 border-gray-700 my-2" />
-                {/* Mobile Auth Actions for non-logged in users */}
                 {!currentUser && (
-                    <button onClick={(e) => handleNavLinkClick(e, 'login')} className={mobileAuthButtonClass} role="menuitem">
+                    <button onClick={(e) => handleNavLinkClick(e, {label: 'Login', href: 'login'})} className={mobileAuthButtonClass} role="menuitem">
                         Admin Login
                     </button>
                 )}
-                {/* Logout button for mobile if admin is logged in, though nav bar is hidden, this is fallback */}
-                {currentUser && (
-                     <button onClick={(e) => handleNavLinkClick(e, 'logout')} className={mobileAuthButtonClass} role="menuitem">
+                {currentUser && ( // Should not happen if nav is hidden, but for completeness
+                     <button onClick={(e) => handleNavLinkClick(e, {label: 'Logout', href: 'logout'})} className={mobileAuthButtonClass} role="menuitem">
                         Logout
                     </button>
                 )}
@@ -259,7 +255,6 @@ const Header: React.FC<HeaderProps> = ({ onShowLogin, onShowHome }) => {
           )}
         </nav>
       )}
-       {/* Simplified header for logged-in admin (only top bar visible) */}
        {currentUser && (
         <div className="bg-black text-white h-14 md:h-16 flex items-center justify-center">
             <p className="text-sm font-medium">Admin Product Management</p>
