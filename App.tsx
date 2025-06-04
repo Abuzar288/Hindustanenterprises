@@ -1,12 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Header from './Header';
 import ProductCard from './ProductCard';
 import ContentCard from './ContentCard';
 import LoginForm from './LoginForm';
-import AdminPage from './AdminPage'; // New import
+import AdminPage from './AdminPage';
 import { Product, ContentItem, WelcomeContent } from './types';
 import { fetchProducts as fetchInitialProducts, fetchContentItems, fetchWelcomeContent } from './api';
 import { useAuth } from './AuthContext';
+import { PRODUCT_CATEGORY_NAV_LABELS } from './constants'; // For scrolling logic
 
 type AuthView = 'none' | 'login'; 
 
@@ -15,9 +16,9 @@ const App: React.FC = () => {
   const [contentItems, setContentItems] = useState<ContentItem[]>([]);
   const [welcomeContent, setWelcomeContent] = useState<WelcomeContent | null>(null);
   
-  const [productsLoading, setProductsLoading] = useState<boolean>(true); // Start true
-  const [contentLoading, setContentLoading] = useState<boolean>(true); // Start true
-  const [welcomeLoading, setWelcomeLoading] = useState<boolean>(true); // Start true
+  const [productsLoading, setProductsLoading] = useState<boolean>(true);
+  const [contentLoading, setContentLoading] = useState<boolean>(true);
+  const [welcomeLoading, setWelcomeLoading] = useState<boolean>(true);
 
   const [productsError, setProductsError] = useState<string | null>(null);
   const [contentError, setContentError] = useState<string | null>(null);
@@ -26,8 +27,11 @@ const App: React.FC = () => {
   const [authView, setAuthView] = useState<AuthView>('none');
   const { currentUser, isLoading: authIsLoading } = useAuth();
 
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const prevSelectedCategoryRef = useRef<string | null>(null);
+
+
   useEffect(() => {
-    // Fetch non-product data once on mount
     setWelcomeLoading(true);
     fetchWelcomeContent()
       .then(data => setWelcomeContent(data))
@@ -40,7 +44,6 @@ const App: React.FC = () => {
       .catch(() => setContentError('Failed to load latest updates.'))
       .finally(() => setContentLoading(false));
 
-    // Fetch initial products once on mount and merge them
     setProductsLoading(true);
     fetchInitialProducts()
         .then(initialData => {
@@ -50,7 +53,7 @@ const App: React.FC = () => {
                 
                 initialData.forEach(initialProd => {
                     if (!existingIds.has(initialProd.id)) {
-                        combined.push(initialProd); // Add initial product if not already present
+                        combined.push(initialProd);
                     }
                 });
                 return combined;
@@ -59,7 +62,7 @@ const App: React.FC = () => {
         .catch(() => setProductsError('Failed to load initial products.'))
         .finally(() => setProductsLoading(false));
 
-  }, []); // Empty dependency array ensures this runs once on component mount
+  }, []);
 
   useEffect(() => {
     if (currentUser && authView === 'login') {
@@ -67,13 +70,37 @@ const App: React.FC = () => {
     }
   }, [currentUser, authView]);
 
+  useEffect(() => {
+    // Scroll to products section when category changes, but not on initial load if no category is pre-selected
+    // and only if it's a known product category link (to avoid scrolling for #about etc. if logic changes)
+    if (selectedCategory !== prevSelectedCategoryRef.current && 
+        (selectedCategory === null || PRODUCT_CATEGORY_NAV_LABELS.includes(selectedCategory))) {
+        const productsSection = document.getElementById('products');
+        if (productsSection) {
+            // The pt-16 on the section should handle offset for sticky header
+            productsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    }
+    prevSelectedCategoryRef.current = selectedCategory;
+  }, [selectedCategory]);
+
+
   const handleAddNewProduct = (newProduct: Product) => {
-    setProducts(prevProducts => [newProduct, ...prevProducts]); // Prepend new product
+    setProducts(prevProducts => [newProduct, ...prevProducts]);
+  };
+
+  const handleSelectCategory = (categoryName: string | null) => {
+    setSelectedCategory(categoryName);
+    // If navigating to a category, ensure we are on the main site view
+    if (authView !== 'none' && !currentUser) { // don't switch view if admin is logged in
+        setAuthView('none');
+    }
   };
 
   const showLogin = () => setAuthView('login');
   const showHome = () => {
     setAuthView('none');
+    setSelectedCategory(null); // Also reset category when explicitly going home
     if(!currentUser) {
         window.scrollTo({ top: 0, behavior: 'smooth'});
     }
@@ -94,6 +121,10 @@ const App: React.FC = () => {
     </div>
   );
 
+  const displayedProducts = selectedCategory
+    ? products.filter(product => product.category === selectedCategory)
+    : products;
+
   const renderMainSiteContent = () => (
     <>
       <section id="home" className="mb-12 text-center bg-white p-6 md:p-10 rounded-lg shadow-sm pt-16 -mt-16">
@@ -112,9 +143,14 @@ const App: React.FC = () => {
                 onClick={(e) => {
                     e.preventDefault();
                     const targetId = welcomeContent.callToAction?.href.substring(1);
-                    const targetElement = document.getElementById(targetId!);
-                    if (targetElement) {
-                         targetElement.scrollIntoView({ behavior: 'smooth' });
+                    if (targetId === 'products') { // Special handling for CTA to products
+                        handleSelectCategory(null); // Show all products
+                         // Scroll is handled by useEffect for selectedCategory
+                    } else {
+                        const targetElement = document.getElementById(targetId!);
+                        if (targetElement) {
+                            targetElement.scrollIntoView({ behavior: 'smooth' });
+                        }
                     }
                 }}
                 className="inline-block bg-amber-500 hover:bg-amber-600 text-white font-semibold py-3 px-8 rounded-lg shadow-md transition-transform duration-300 hover:scale-105"
@@ -126,28 +162,40 @@ const App: React.FC = () => {
         )}
       </section>
 
+      {/* Placeholder sections for About and Contact - product category sections removed */}
       <section id="about" className="mb-12 pt-16 -mt-16"></section>
-      <section id="kitchen-products" className="mb-12 pt-16 -mt-16"></section>
-      <section id="furniture" className="mb-12 pt-16 -mt-16"></section>
-      <section id="hardware" className="mb-12 pt-16 -mt-16"></section>
-      <section id="bathroom" className="mb-12 pt-16 -mt-16"></section>
-      <section id="kitchen-bar" className="mb-12 pt-16 -mt-16"></section>
-      <section id="decor" className="mb-12 pt-16 -mt-16"></section>
       <section id="contact" className="mb-12 pt-16 -mt-16"></section>
 
       <section id="products" className="mb-12 pt-16 -mt-16">
-        <h2 className="text-2xl sm:text-3xl font-semibold text-gray-800 mb-6 text-center md:text-left">Our Products</h2>
-        {(productsLoading && products.length === 0) && renderLoadingState('products')}
-        {(productsError && products.length === 0) && renderErrorState(productsError, 'products')}
-        {!productsError && products.length > 0 && (
+        <div className="flex flex-col sm:flex-row justify-between items-center mb-6">
+            <h2 className="text-2xl sm:text-3xl font-semibold text-gray-800 text-center sm:text-left">
+            {selectedCategory ? `${selectedCategory}` : 'Our Products'}
+            </h2>
+            {selectedCategory && (
+            <button
+                onClick={() => handleSelectCategory(null)}
+                className="mt-2 sm:mt-0 text-sm text-amber-600 hover:text-amber-700 hover:underline font-medium py-1 px-2 rounded focus:outline-none focus:ring-2 focus:ring-amber-400"
+                aria-label="Show all products"
+            >
+                (Show All Products)
+            </button>
+            )}
+        </div>
+
+        {(productsLoading && displayedProducts.length === 0) && renderLoadingState('products')}
+        {(productsError && displayedProducts.length === 0) && renderErrorState(productsError, 'products')}
+        
+        {!productsError && displayedProducts.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-8">
-            {products.map(product => (
+            {displayedProducts.map(product => (
               <ProductCard key={product.id} product={product} />
             ))}
           </div>
         )}
-         {!productsLoading && !productsError && products.length === 0 && (
-          <p className="text-gray-600 text-center py-5">No products available at the moment.</p>
+         {!productsLoading && !productsError && displayedProducts.length === 0 && (
+          <p className="text-gray-600 text-center py-5">
+            {selectedCategory ? `No products found in ${selectedCategory}.` : 'No products available at the moment.'}
+          </p>
         )}
       </section>
 
@@ -192,6 +240,7 @@ const App: React.FC = () => {
       <Header 
         onShowLogin={showLogin} 
         onShowHome={showHome} 
+        onSelectCategory={handleSelectCategory} // Pass the new handler
       />
       <main className="container mx-auto p-4 md:p-8 flex-grow">
         {renderContent()}
@@ -205,4 +254,3 @@ const App: React.FC = () => {
 };
 
 export default App;
-
