@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import Header from './Header';
 import ProductCard from './ProductCard';
@@ -71,13 +72,10 @@ const App: React.FC = () => {
   }, [currentUser, authView]);
 
   useEffect(() => {
-    // Scroll to products section when category changes, but not on initial load if no category is pre-selected
-    // and only if it's a known product category link (to avoid scrolling for #about etc. if logic changes)
     if (selectedCategory !== prevSelectedCategoryRef.current && 
         (selectedCategory === null || PRODUCT_CATEGORY_NAV_LABELS.includes(selectedCategory))) {
         const productsSection = document.getElementById('products');
         if (productsSection) {
-            // The pt-16 on the section should handle offset for sticky header
             productsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     }
@@ -91,8 +89,9 @@ const App: React.FC = () => {
 
   const handleSelectCategory = (categoryName: string | null) => {
     setSelectedCategory(categoryName);
-    // If navigating to a category, ensure we are on the main site view
-    if (authView !== 'none' && !currentUser) { // don't switch view if admin is logged in
+    // If a category is selected (even null for 'Show All'), 
+    // and the user is not an admin, ensure we are viewing the main site content.
+    if (!currentUser) {
         setAuthView('none');
     }
   };
@@ -100,7 +99,7 @@ const App: React.FC = () => {
   const showLogin = () => setAuthView('login');
   const showHome = () => {
     setAuthView('none');
-    setSelectedCategory(null); // Also reset category when explicitly going home
+    setSelectedCategory(null); 
     if(!currentUser) {
         window.scrollTo({ top: 0, behavior: 'smooth'});
     }
@@ -122,7 +121,7 @@ const App: React.FC = () => {
   );
 
   const displayedProducts = selectedCategory
-    ? products.filter(product => product.category === selectedCategory)
+    ? products.filter(product => product.category.trim() === selectedCategory.trim())
     : products;
 
   const renderMainSiteContent = () => (
@@ -143,9 +142,8 @@ const App: React.FC = () => {
                 onClick={(e) => {
                     e.preventDefault();
                     const targetId = welcomeContent.callToAction?.href.substring(1);
-                    if (targetId === 'products') { // Special handling for CTA to products
-                        handleSelectCategory(null); // Show all products
-                         // Scroll is handled by useEffect for selectedCategory
+                    if (targetId === 'products') { 
+                        handleSelectCategory(null); 
                     } else {
                         const targetElement = document.getElementById(targetId!);
                         if (targetElement) {
@@ -162,7 +160,6 @@ const App: React.FC = () => {
         )}
       </section>
 
-      {/* Placeholder sections for About and Contact - product category sections removed */}
       <section id="about" className="mb-12 pt-16 -mt-16"></section>
       <section id="contact" className="mb-12 pt-16 -mt-16"></section>
 
@@ -240,7 +237,7 @@ const App: React.FC = () => {
       <Header 
         onShowLogin={showLogin} 
         onShowHome={showHome} 
-        onSelectCategory={handleSelectCategory} // Pass the new handler
+        onSelectCategory={handleSelectCategory}
       />
       <main className="container mx-auto p-4 md:p-8 flex-grow">
         {renderContent()}
