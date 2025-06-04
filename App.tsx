@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import Header from './Header';
 import ProductCard from './ProductCard';
@@ -9,16 +8,16 @@ import { Product, ContentItem, WelcomeContent } from './types';
 import { fetchProducts as fetchInitialProducts, fetchContentItems, fetchWelcomeContent } from './api';
 import { useAuth } from './AuthContext';
 
-type AuthView = 'none' | 'login'; // Removed 'register'
+type AuthView = 'none' | 'login'; 
 
 const App: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [contentItems, setContentItems] = useState<ContentItem[]>([]);
   const [welcomeContent, setWelcomeContent] = useState<WelcomeContent | null>(null);
   
-  const [productsLoading, setProductsLoading] = useState<boolean>(true);
-  const [contentLoading, setContentLoading] = useState<boolean>(true);
-  const [welcomeLoading, setWelcomeLoading] = useState<boolean>(true);
+  const [productsLoading, setProductsLoading] = useState<boolean>(true); // Start true
+  const [contentLoading, setContentLoading] = useState<boolean>(true); // Start true
+  const [welcomeLoading, setWelcomeLoading] = useState<boolean>(true); // Start true
 
   const [productsError, setProductsError] = useState<string | null>(null);
   const [contentError, setContentError] = useState<string | null>(null);
@@ -28,39 +27,39 @@ const App: React.FC = () => {
   const { currentUser, isLoading: authIsLoading } = useAuth();
 
   useEffect(() => {
-    const loadPublicData = () => {
-      setWelcomeLoading(true);
-      fetchWelcomeContent()
-        .then(data => setWelcomeContent(data))
-        .catch(() => setWelcomeError('Failed to load welcome message.'))
-        .finally(() => setWelcomeLoading(false));
+    // Fetch non-product data once on mount
+    setWelcomeLoading(true);
+    fetchWelcomeContent()
+      .then(data => setWelcomeContent(data))
+      .catch(() => setWelcomeError('Failed to load welcome message.'))
+      .finally(() => setWelcomeLoading(false));
 
-      setProductsLoading(true);
-      fetchInitialProducts() 
-        .then(data => setProducts(data))
-        .catch(() => setProductsError('Failed to load products. Please try again later.'))
+    setContentLoading(true);
+    fetchContentItems()
+      .then(data => setContentItems(data))
+      .catch(() => setContentError('Failed to load latest updates.'))
+      .finally(() => setContentLoading(false));
+
+    // Fetch initial products once on mount and merge them
+    setProductsLoading(true);
+    fetchInitialProducts()
+        .then(initialData => {
+            setProducts(prevProductsInState => {
+                const combined = [...prevProductsInState];
+                const existingIds = new Set(prevProductsInState.map(p => p.id));
+                
+                initialData.forEach(initialProd => {
+                    if (!existingIds.has(initialProd.id)) {
+                        combined.push(initialProd); // Add initial product if not already present
+                    }
+                });
+                return combined;
+            });
+        })
+        .catch(() => setProductsError('Failed to load initial products.'))
         .finally(() => setProductsLoading(false));
 
-      setContentLoading(true);
-      fetchContentItems()
-        .then(data => setContentItems(data))
-        .catch(() => setContentError('Failed to load latest updates.'))
-        .finally(() => setContentLoading(false));
-    };
-    
-    if (!currentUser && authView === 'none') {
-      loadPublicData();
-    } else if (currentUser) { // If admin is logged in
-       // Load initial products if not already loaded, for admin to see
-       if (products.length === 0 && !productsLoading && !productsError) { 
-            setProductsLoading(true);
-            fetchInitialProducts()
-            .then(data => setProducts(data))
-            .catch(() => setProductsError('Failed to load initial products for admin.'))
-            .finally(() => setProductsLoading(false));
-       }
-    }
-  }, [authView, currentUser, products.length, productsLoading, productsError]); // Added productsError to dependency
+  }, []); // Empty dependency array ensures this runs once on component mount
 
   useEffect(() => {
     if (currentUser && authView === 'login') {
@@ -69,7 +68,7 @@ const App: React.FC = () => {
   }, [currentUser, authView]);
 
   const handleAddNewProduct = (newProduct: Product) => {
-    setProducts(prevProducts => [newProduct, ...prevProducts]);
+    setProducts(prevProducts => [newProduct, ...prevProducts]); // Prepend new product
   };
 
   const showLogin = () => setAuthView('login');
@@ -176,7 +175,6 @@ const App: React.FC = () => {
     }
     if (currentUser) { 
         if (authView === 'login') return <LoginForm onLoginSuccess={showHome} />; 
-        // Pass the current products list to AdminPage
         return <AdminPage onAddProduct={handleAddNewProduct} allProducts={products} />;
     }
 
@@ -207,3 +205,4 @@ const App: React.FC = () => {
 };
 
 export default App;
+
