@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import App from './App';
-import { AuthProvider } from './AuthContext'; // Path should be correct as AuthContext.tsx is in root
+import App from './App'; // Ensured correct relative path
+import { AuthProvider } from './AuthContext'; 
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
